@@ -1,5 +1,5 @@
-use core::fmt::{Display, Debug, Formatter};
 use core::fmt::Result as FmtResult;
+use core::fmt::{Debug, Display, Formatter};
 
 #[derive(Copy, Clone, Debug)]
 pub struct Metadata {
@@ -24,7 +24,10 @@ pub struct Error<'a> {
 
 impl<'a> Display for Error<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        f.write_fmt(format_args!("{} test failed at '{}'", self.metadata, self.cause))
+        f.write_fmt(format_args!(
+            "{} test failed at '{}'",
+            self.metadata, self.cause
+        ))
     }
 }
 

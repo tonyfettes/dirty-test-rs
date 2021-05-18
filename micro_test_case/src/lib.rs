@@ -1,8 +1,8 @@
 extern crate proc_macro;
 
+use darling::FromMeta;
 use proc_macro2::TokenStream;
 use quote::quote;
-use darling::FromMeta;
 
 #[derive(FromMeta)]
 struct FullAttrArgs {
@@ -16,24 +16,30 @@ struct TargetAttrArgs {
 }
 
 #[derive(FromMeta)]
-struct EmptyAttrArgs {
-}
+struct EmptyAttrArgs {}
 
 struct ProcMacroAttrArgs {
     target: Option<String>,
     feature: Option<String>,
 }
 
-const METADATA_NAME: &'static str = "__micro_test_private_api_metadata_X19yZXRlc3RfcHJpdmF0ZV9hcGlfbWV0YWRhdGEK";
-
+const METADATA_NAME: &'static str =
+    "__micro_test_private_api_metadata_X19yZXRlc3RfcHJpdmF0ZV9hcGlfbWV0YWRhdGEK";
 const RESULT_PROCESSOR_NAME: &'static str = "__private_api_process_result";
-
-#[cfg(feature = "replace_assert")]
 const WRAPPED_ASSERT_PREFIX: &'static str = "micro_";
+#[cfg(feature = "replace_assert")]
+const TARGET_ASSERT_PREFIX: &'static str = "assert";
+#[cfg(not(feature = "replace_assert"))]
+const TARGET_ASSERT_PREFIX: &'static str = "micro_assert";
 
 #[cfg(feature = "replace_assert")]
 fn transform_macro(mac: &mut syn::Macro, micro_test_crate: String) {
-    assert_eq!(mac.path.segments.len(), 1, "#[micro_test_assert] should only be applied to assert* macro invocation");
+    assert_eq!(
+        mac.path.segments.len(),
+        1,
+        "#[micro_test_assert] should only be applied to assert* macro invocation: path length: {}",
+        mac.path.segments.len()
+    );
     let old_string = mac.path.segments.last().unwrap().ident.to_string();
     if old_string.starts_with("assert") {
         let new_string: String = micro_test_crate + "::" + WRAPPED_ASSERT_PREFIX + &old_string;
@@ -44,27 +50,49 @@ fn transform_macro(mac: &mut syn::Macro, micro_test_crate: String) {
         };
         mac.path = syn::parse2::<syn::Path>(new_ts).unwrap();
         let old_tokens = mac.tokens.clone();
-        let metadata: syn::Ident = syn::parse2(METADATA_NAME.parse::<TokenStream>().unwrap()).unwrap();
+        let metadata: syn::Ident =
+            syn::parse2(METADATA_NAME.parse::<TokenStream>().unwrap()).unwrap();
         mac.tokens = quote!(#metadata, #old_tokens).into();
-    } else {
-        panic!("#[micro_test_assert] should only be applied to assert* macro invocation");
     }
 }
 
-#[cfg(feature = "replace_assert")]
+#[cfg(not(feature = "replace_assert"))]
+fn transform_macro(mac: &mut syn::Macro, micro_test_crate: String) {
+    assert_eq!(
+        mac.path.segments.len(),
+        1,
+        "#[micro_test_assert] should only be applied to assert* macro invocation: path length: {}",
+        mac.path.segments.len()
+    );
+    let old_string = mac.path.segments.last().unwrap().ident.to_string();
+    if old_string.starts_with("micro_assert") {
+        let new_string: String = micro_test_crate + "::" + &old_string;
+        let new_ts = new_string.parse::<TokenStream>();
+        let new_ts = match new_ts {
+            Ok(ts) => ts,
+            Err(e) => panic!("Failed to parse new_string: {}", e),
+        };
+        mac.path = syn::parse2::<syn::Path>(new_ts).unwrap();
+        let old_tokens = mac.tokens.clone();
+        let metadata: syn::Ident =
+            syn::parse2(METADATA_NAME.parse::<TokenStream>().unwrap()).unwrap();
+        mac.tokens = quote!(#metadata, #old_tokens).into();
+    }
+}
+
 fn transform_expr(expr: &mut syn::Expr, micro_test_crate: &String) {
     use syn::Expr::*;
     match expr {
-        Macro(macro_expr) => {
-            transform_macro(&mut macro_expr.mac, micro_test_crate.clone())
-        },
+        Macro(macro_expr) => transform_macro(&mut macro_expr.mac, micro_test_crate.clone()),
         If(if_expr) => {
             transform_block(&mut if_expr.then_branch, micro_test_crate);
             match if_expr.else_branch.clone() {
-                Some((_, mut else_branch_expr)) => transform_expr(&mut else_branch_expr, micro_test_crate),
+                Some((_, mut else_branch_expr)) => {
+                    transform_expr(&mut else_branch_expr, micro_test_crate)
+                }
                 None => (),
             }
-        },
+        }
         ForLoop(for_loop_expr) => transform_block(&mut for_loop_expr.body, micro_test_crate),
         Loop(loop_expr) => transform_block(&mut loop_expr.body, micro_test_crate),
         While(while_expr) => transform_block(&mut while_expr.body, micro_test_crate),
@@ -74,12 +102,11 @@ fn transform_expr(expr: &mut syn::Expr, micro_test_crate: &String) {
             for arm in arms {
                 transform_expr(&mut *arm.body, micro_test_crate);
             }
-        },
+        }
         _ => (),
     }
 }
 
-#[cfg(feature = "replace_assert")]
 fn transform_stmt(stmt: &mut syn::Stmt, micro_test_crate: &String) {
     match stmt {
         syn::Stmt::Expr(expr) => transform_expr(expr, micro_test_crate),
@@ -88,7 +115,6 @@ fn transform_stmt(stmt: &mut syn::Stmt, micro_test_crate: &String) {
     }
 }
 
-#[cfg(feature = "replace_assert")]
 fn transform_block(block: &mut syn::Block, micro_test_crate: &String) {
     let statements = &mut block.stmts;
     for mut statement in statements {
@@ -97,17 +123,31 @@ fn transform_block(block: &mut syn::Block, micro_test_crate: &String) {
 }
 
 #[proc_macro_attribute]
-pub fn micro_test_case(attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn micro_test_case(
+    attr: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     let orig_attr_args = syn::parse_macro_input!(attr as syn::AttributeArgs);
     let attr_args = match FullAttrArgs::from_list(&orig_attr_args) {
-        Ok(v) => ProcMacroAttrArgs { target: Some(v.target), feature: Some(v.feature) },
+        Ok(v) => ProcMacroAttrArgs {
+            target: Some(v.target),
+            feature: Some(v.feature),
+        },
         Err(_) => match TargetAttrArgs::from_list(&orig_attr_args) {
-            Ok(v) => ProcMacroAttrArgs { target: Some(v.target), feature: None },
+            Ok(v) => ProcMacroAttrArgs {
+                target: Some(v.target),
+                feature: None,
+            },
             Err(_) => match EmptyAttrArgs::from_list(&orig_attr_args) {
-                Ok(_) => ProcMacroAttrArgs { target: None, feature: None },
-                Err(e) => { return proc_macro::TokenStream::from(e.write_errors()); }
-            }
-        }
+                Ok(_) => ProcMacroAttrArgs {
+                    target: None,
+                    feature: None,
+                },
+                Err(e) => {
+                    return proc_macro::TokenStream::from(e.write_errors());
+                }
+            },
+        },
     };
     proc_macro::TokenStream::from(micro_test_case_impl(attr_args, TokenStream::from(item)))
 }
@@ -115,33 +155,33 @@ pub fn micro_test_case(attr: proc_macro::TokenStream, item: proc_macro::TokenStr
 fn micro_test_case_impl(attr_args: ProcMacroAttrArgs, item: TokenStream) -> TokenStream {
     // Get the name of micro_test crate
     let micro_test_crate_string = match proc_macro_crate::crate_name("micro_test") {
-        Ok(founded_crate) => {
-            match founded_crate {
-                proc_macro_crate::FoundCrate::Itself => panic!("The name of this proc_macro crate should be micro_test_macro"),
-                proc_macro_crate::FoundCrate::Name(name_string) => name_string,
+        Ok(founded_crate) => match founded_crate {
+            proc_macro_crate::FoundCrate::Itself => {
+                panic!("The name of this proc_macro crate should be micro_test_macro")
             }
+            proc_macro_crate::FoundCrate::Name(name_string) => name_string,
         },
         Err(e) => panic!("Cannot find micro_test crate: {}", e),
     };
 
-    #[cfg(feature = "replace_assert")]
     let mut input = syn::parse2::<syn::ItemFn>(item).unwrap();
-    #[cfg(not(feature = "replace_assert"))]
-    let input = syn::parse2::<syn::ItemFn>(item).unwrap();
 
     // Process the function signature
     let signature = input.sig;
     if signature.asyncness.is_some() {
         panic!("#[micro_test_case] test function should not be async");
     }
-    if signature.generics.lt_token.is_some() ||
-        signature.generics.gt_token.is_some() ||
-        signature.generics.where_clause.is_some() {
+    if signature.generics.lt_token.is_some()
+        || signature.generics.gt_token.is_some()
+        || signature.generics.where_clause.is_some()
+    {
         panic!("#[micro_test_case] test function should not have generics");
     }
     match signature.output {
         syn::ReturnType::Default => (),
-        syn::ReturnType::Type(_, _) => panic!("#[micro_test_case] test function should not have return type"),
+        syn::ReturnType::Type(_, _) => {
+            panic!("#[micro_test_case] test function should not have return type")
+        }
     }
     let function_name = signature.ident;
     let target = match attr_args.target {
@@ -157,12 +197,8 @@ fn micro_test_case_impl(attr_args: ProcMacroAttrArgs, item: TokenStream) -> Toke
     };
 
     // Process the function body
-    #[cfg(feature = "replace_assert")]
     let mut block = &mut *input.block;
-    #[cfg(feature = "replace_assert")]
     transform_block(&mut block, &micro_test_crate_string);
-    #[cfg(not(feature = "replace_assert"))]
-    let block = input.block;
 
     let micro_test_crate = syn::Ident::from_string(&micro_test_crate_string).unwrap();
     let metadata = syn::Ident::from_string(METADATA_NAME).unwrap();
@@ -182,14 +218,17 @@ fn micro_test_case_impl(attr_args: ProcMacroAttrArgs, item: TokenStream) -> Toke
 
 #[cfg(any())]
 #[proc_macro_attribute]
-pub fn micro_test_assert(_attr: proc_macro::TokenStream, item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn micro_test_assert(
+    _attr: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     let micro_test_crate = match proc_macro_crate::crate_name("micro_test") {
-        Ok(founded_crate) => {
-            match founded_crate {
-                proc_macro_crate::FoundCrate::Itself => panic!("The name of this proc_macro crate should be micro_test_macro"),
-                proc_macro_crate::FoundCrate::Name(name_string) => name_string,
+        Ok(founded_crate) => match founded_crate {
+            proc_macro_crate::FoundCrate::Itself => {
+                panic!("The name of this proc_macro crate should be micro_test_macro")
             }
-        }
+            proc_macro_crate::FoundCrate::Name(name_string) => name_string,
+        },
         Err(e) => panic!("Cannot find micro_test crate: {}", e),
     };
     let input = syn::parse_macro_input!(item as syn::Stmt);

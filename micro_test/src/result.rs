@@ -37,7 +37,13 @@ pub type TestResult<'a> = Result<Metadata, Error<'a>>;
 
 #[macro_export]
 macro_rules! micro_assert {
-    ($metadata:expr, $test_expr:expr $(,)?) => {
+    ($test_expr:expr $(,)?) => {
+        assert!($test_expr);
+    };
+    ($test_expr:expr, $($arg:tt)+) => {
+        assert!($test_expr, $($arg)+);
+    };
+    (metadata $metadata:expr, $test_expr:expr $(,)?) => {
         match $test_expr {
             true => {},
             false => {
@@ -49,7 +55,7 @@ macro_rules! micro_assert {
             }
         }
     };
-    ($metadata:expr, $test_expr:expr, $($arg:tt)+) => {
+    (metadata $metadata:expr, $test_expr:expr, $($arg:tt)+) => {
         match $test_expr {
             true => {},
             false => {
@@ -65,7 +71,13 @@ macro_rules! micro_assert {
 
 #[macro_export]
 macro_rules! micro_assert_eq {
-    ($metadata:expr, $left:expr, $right:expr $(,)?) => {
+    ($left:expr, $right:expr $(,)?) => {
+        assert_eq!($left, $right);
+    };
+    ($left:expr, $right:expr, $($arg:tt)+) => {
+        assert_eq!($left, $right, $($arg)+);
+    };
+    (metadata $metadata:expr, $left:expr, $right:expr $(,)?) => {
         match (&$left, &$right) {
             (left_val, right_val) => {
                 if !(*left_val == *right_val) {
@@ -83,7 +95,7 @@ right: `{:?}`"#,
             }
         }
     };
-    ($metadata:expr, $left:expr, $right:expr, $($arg:tt)+) => {
+    (metadata $metadata:expr, $left:expr, $right:expr, $($arg:tt)+) => {
         match (&$left, &$right) {
             (left_val, right_val) => {
                 if !(*left_val == *right_val) {
@@ -105,7 +117,13 @@ right: `{:?}`: {}"#,
 
 #[macro_export]
 macro_rules! micro_assert_ne {
-    ($metadata:expr, $left:expr, $right:expr $(,)?) => {
+    ($left:expr, $right:expr $(,)?) => {
+        assert_ne!($left, $right);
+    };
+    ($left:expr, $right:expr, $($arg:tt)+) => {
+        assert_ne!($left, $right, $($arg)+);
+    };
+    (metadata $metadata:expr, $left:expr, $right:expr $(,)?) => {
         match (&$left, &$right) {
             (left_val, right_val) => {
                 if !(*left_val != *right_val) {
@@ -123,7 +141,7 @@ right: `{:?}`"#,
             }
         }
     };
-    ($metadata:expr, $left:expr, $right:expr, $($arg:tt)+) => {
+    (metadata $metadata:expr, $left:expr, $right:expr, $($arg:tt)+) => {
         match (&$left, &$right) {
             (left_val, right_val) => {
                 if !(*left_val != *right_val) {

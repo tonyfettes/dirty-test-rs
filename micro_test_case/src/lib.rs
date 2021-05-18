@@ -26,11 +26,6 @@ struct ProcMacroAttrArgs {
 const METADATA_NAME: &'static str =
     "__micro_test_private_api_metadata_X19yZXRlc3RfcHJpdmF0ZV9hcGlfbWV0YWRhdGEK";
 const RESULT_PROCESSOR_NAME: &'static str = "__private_api_process_result";
-const WRAPPED_ASSERT_PREFIX: &'static str = "micro_";
-#[cfg(feature = "replace_assert")]
-const TARGET_ASSERT_PREFIX: &'static str = "assert";
-#[cfg(not(feature = "replace_assert"))]
-const TARGET_ASSERT_PREFIX: &'static str = "micro_assert";
 
 #[cfg(feature = "replace_assert")]
 fn transform_macro(mac: &mut syn::Macro, micro_test_crate: String) {
@@ -42,7 +37,7 @@ fn transform_macro(mac: &mut syn::Macro, micro_test_crate: String) {
     );
     let old_string = mac.path.segments.last().unwrap().ident.to_string();
     if old_string.starts_with("assert") {
-        let new_string: String = micro_test_crate + "::" + WRAPPED_ASSERT_PREFIX + &old_string;
+        let new_string: String = micro_test_crate + "::" + "micro_" + &old_string;
         let new_ts = new_string.parse::<TokenStream>();
         let new_ts = match new_ts {
             Ok(ts) => ts,
@@ -52,31 +47,21 @@ fn transform_macro(mac: &mut syn::Macro, micro_test_crate: String) {
         let old_tokens = mac.tokens.clone();
         let metadata: syn::Ident =
             syn::parse2(METADATA_NAME.parse::<TokenStream>().unwrap()).unwrap();
-        mac.tokens = quote!(#metadata, #old_tokens).into();
+        mac.tokens = quote!(metadata #metadata, #old_tokens).into();
     }
 }
 
 #[cfg(not(feature = "replace_assert"))]
 fn transform_macro(mac: &mut syn::Macro, micro_test_crate: String) {
-    assert_eq!(
-        mac.path.segments.len(),
-        1,
-        "#[micro_test_assert] should only be applied to assert* macro invocation: path length: {}",
-        mac.path.segments.len()
-    );
     let old_string = mac.path.segments.last().unwrap().ident.to_string();
+    if old_string.len() == 2 {
+        assert_eq!(mac.path.segments.first().unwrap().ident.to_string(), micro_test_crate);
+    }
     if old_string.starts_with("micro_assert") {
-        let new_string: String = micro_test_crate + "::" + &old_string;
-        let new_ts = new_string.parse::<TokenStream>();
-        let new_ts = match new_ts {
-            Ok(ts) => ts,
-            Err(e) => panic!("Failed to parse new_string: {}", e),
-        };
-        mac.path = syn::parse2::<syn::Path>(new_ts).unwrap();
         let old_tokens = mac.tokens.clone();
         let metadata: syn::Ident =
             syn::parse2(METADATA_NAME.parse::<TokenStream>().unwrap()).unwrap();
-        mac.tokens = quote!(#metadata, #old_tokens).into();
+        mac.tokens = quote!(metadata #metadata, #old_tokens).into();
     }
 }
 
@@ -119,6 +104,43 @@ fn transform_block(block: &mut syn::Block, micro_test_crate: &String) {
     let statements = &mut block.stmts;
     for mut statement in statements {
         transform_stmt(&mut statement, micro_test_crate);
+    }
+}
+
+#[proc_macro_attribute]
+pub fn micro_test_module(
+    _attr: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    unimplemented!("Unimplemented yet");
+    let input = syn::parse_macro_input!(item as syn::ItemMod);
+    assert!(input.semi.is_none(), "This attribute should not be applied to: mod m;");
+    let (brace, mut items) = match input.content {
+        Some(content) => content,
+        None => panic!("This attribute should not be applied to: mod m;"),
+    };
+    micro_test_module_impl(&mut items);
+    let output = syn::ItemMod {
+        attrs: input.attrs,
+        vis: input.vis,
+        mod_token: input.mod_token,
+        ident: input.ident,
+        content: Some((brace, items)),
+        semi: input.semi,
+    };
+    quote!(#output).into()
+}
+
+fn micro_test_module_impl(items: &mut Vec<syn::Item>) {
+    for item in items {
+        match item {
+            syn::Item::Use(item_use) => {
+            },
+            syn::Item::Fn(item_fn) => {
+            },
+            _ => {
+            }
+        }
     }
 }
 

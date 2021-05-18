@@ -1,0 +1,5 @@
+[workspace]
+members = [
+  "micro_test",
+  "micro_test_case",
+]

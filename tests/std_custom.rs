@@ -5,32 +5,30 @@ fn add_by_one(num: usize) -> usize {
     num + 1
 }
 
-fn print_result(result: micro_test::Result) {
-    match result {
-        Ok(metadata) => match metadata.feature {
+struct SimpleTestProcessor;
+
+impl micro_test::Process for SimpleTestProcessor {
+    fn prepare(&self, metadata: micro_test::Metadata) {
+        match metadata.feature {
             Some(feature) => {
-                println!("test {} ({}) success!", metadata.target, feature);
+                println!("testing {} ({}) ...", metadata.target, feature);
             }
             None => {
-                println!("test {} success!", metadata.target);
+                println!("testing {} ...", metadata.target);
             }
-        },
-        Err(e) => match e.metadata.feature {
-            Some(feature) => {
-                println!(
-                    "test {} ({}) FAILED: {}!",
-                    e.metadata.target, feature, e.cause
-                );
-            }
-            None => {
-                println!("test {} FAILED: {}!", e.metadata.target, e.cause);
-            }
-        },
+        }
+    }
+    fn settle(&self, result: micro_test::Result) {
+        match result {
+            Ok(_) => println!("ok"),
+            Err(e) => println!("FAILED: {}", e),
+        }
     }
 }
 
 fn test_runner(tests: &[&dyn Fn()]) {
-    micro_test::set_result_processor(print_result);
+    static TEST_PROCESSOR: SimpleTestProcessor = SimpleTestProcessor;
+    micro_test::set_processor(&TEST_PROCESSOR);
     for test in tests {
         test();
     }

@@ -3,15 +3,16 @@
 /// This macro will call result processing function set by users when assertion
 /// failed and returns, and therefore is NOT HYGIENIC. There is no point to use
 /// this macro outside test function marked with `#[micro_test_case]`, and it
-/// will turn into a common `aseert!`.
+/// will turn into a common `assert!`.
 ///
 /// # Example
 ///
 /// ```rust
-///
+/// # use micro_test::micro_assert;
+/// micro_assert!(1 + 1 == 2, "Math is broken.");
 /// ```
 ///
-/// # Explanation
+/// # Explanations
 ///
 /// This macro does these things:
 ///
@@ -36,29 +37,21 @@
 #[macro_export]
 macro_rules! micro_assert {
     ($test_expr:expr $(,)?) => {
-        assert!($test_expr);
-    };
-    ($test_expr:expr, $($arg:tt)+) => {
-        assert!($test_expr, $($arg)+);
-    };
-    (metadata $metadata:expr, $test_expr:expr $(,)?) => {
         match $test_expr {
             true => {},
             false => {
                 $crate::__private_api_process_result(::core::result::Result::Err($crate::Error {
-                    metadata: $metadata,
                     cause: ::core::format_args!("assertion failed: `{}`", ::core::stringify!($test_expr)),
                 }));
                 return;
             }
         }
     };
-    (metadata $metadata:expr, $test_expr:expr, $($arg:tt)+) => {
+    ($test_expr:expr, $($arg:tt)+) => {
         match $test_expr {
             true => {},
             false => {
                 $crate::__private_api_process_result(::core::result::Result::Err($crate::Error {
-                    metadata: $metadata,
                     cause: ::core::format_args!($($arg)+),
                 }));
                 return;
@@ -67,20 +60,16 @@ macro_rules! micro_assert {
     }
 }
 
+/// Asserts two expression is equal.
+///
+/// See [`micro_assert](macro.micro_assert.html).
 #[macro_export]
 macro_rules! micro_assert_eq {
     ($left:expr, $right:expr $(,)?) => {
-        assert_eq!($left, $right);
-    };
-    ($left:expr, $right:expr, $($arg:tt)+) => {
-        assert_eq!($left, $right, $($arg)+);
-    };
-    (metadata $metadata:expr, $left:expr, $right:expr $(,)?) => {
         match (&$left, &$right) {
             (left_val, right_val) => {
                 if !(*left_val == *right_val) {
                     $crate::__private_api_process_result(::core::result::Result::Err($crate::Error {
-                        metadata: $metadata,
                         cause: ::core::format_args!(
                             r#"assertion failed: `(left == right)`
  left: `{:?}`,
@@ -93,12 +82,11 @@ right: `{:?}`"#,
             }
         }
     };
-    (metadata $metadata:expr, $left:expr, $right:expr, $($arg:tt)+) => {
+    ($left:expr, $right:expr, $($arg:tt)+) => {
         match (&$left, &$right) {
             (left_val, right_val) => {
                 if !(*left_val == *right_val) {
                     $crate::__private_api_process_result(::core::result::Result::Err($crate::Error {
-                        metadata: $metadata,
                         cause: ::core::format_args!(
                             r#"assertion failed: `(left == right)`
  left: `{:?}`,
@@ -113,20 +101,16 @@ right: `{:?}`: {}"#,
     }
 }
 
+/// Asserts two expression is not equal.
+///
+/// See [`micro_assert](macro.micro_assert.html).
 #[macro_export]
 macro_rules! micro_assert_ne {
     ($left:expr, $right:expr $(,)?) => {
-        assert_ne!($left, $right);
-    };
-    ($left:expr, $right:expr, $($arg:tt)+) => {
-        assert_ne!($left, $right, $($arg)+);
-    };
-    (metadata $metadata:expr, $left:expr, $right:expr $(,)?) => {
         match (&$left, &$right) {
             (left_val, right_val) => {
                 if !(*left_val != *right_val) {
                     $crate::__private_api_process_result(::core::result::Result::Err($crate::Error {
-                        metadata: $metadata,
                         cause: ::core::format_args!(
                             r#"assertion failed: `(left != right)`
  left: `{:?}`,
@@ -139,12 +123,11 @@ right: `{:?}`"#,
             }
         }
     };
-    (metadata $metadata:expr, $left:expr, $right:expr, $($arg:tt)+) => {
+    ($left:expr, $right:expr, $($arg:tt)+) => {
         match (&$left, &$right) {
             (left_val, right_val) => {
                 if !(*left_val != *right_val) {
                     $crate::__private_api_process_result(::core::result::Result::Err($crate::Error {
-                        metadata: $metadata,
                         cause: ::core::format_args!(
                             r#"assertion failed: `(left != right)`
  left: `{:?}`,

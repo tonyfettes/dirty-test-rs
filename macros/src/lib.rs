@@ -23,9 +23,8 @@ struct ProcMacroAttrArgs {
     feature: Option<String>,
 }
 
-const METADATA_NAME: &'static str =
-    "__micro_test_private_api_metadata_X19yZXRlc3RfcHJpdmF0ZV9hcGlfbWV0YWRhdGEK";
 const RESULT_PROCESSOR_NAME: &'static str = "__private_api_process_result";
+const METADATA_PROCESSOR_NAME: &'static str = "__private_api_process_metadata";
 
 #[cfg(feature = "replace_assert")]
 fn transform_macro(mac: &mut syn::Macro, micro_test_crate: String) {
@@ -44,10 +43,6 @@ fn transform_macro(mac: &mut syn::Macro, micro_test_crate: String) {
             Err(e) => panic!("Failed to parse new_string: {}", e),
         };
         mac.path = syn::parse2::<syn::Path>(new_ts).unwrap();
-        let old_tokens = mac.tokens.clone();
-        let metadata: syn::Ident =
-            syn::parse2(METADATA_NAME.parse::<TokenStream>().unwrap()).unwrap();
-        mac.tokens = quote!(metadata #metadata, #old_tokens).into();
     }
 }
 
@@ -56,12 +51,6 @@ fn transform_macro(mac: &mut syn::Macro, micro_test_crate: String) {
     let old_string = mac.path.segments.last().unwrap().ident.to_string();
     if old_string.len() == 2 {
         assert_eq!(mac.path.segments.first().unwrap().ident.to_string(), micro_test_crate);
-    }
-    if old_string.starts_with("micro_assert") {
-        let old_tokens = mac.tokens.clone();
-        let metadata: syn::Ident =
-            syn::parse2(METADATA_NAME.parse::<TokenStream>().unwrap()).unwrap();
-        mac.tokens = quote!(metadata #metadata, #old_tokens).into();
     }
 }
 
@@ -147,6 +136,48 @@ fn micro_test_module_impl(items: &mut Vec<syn::Item>) {
     }
 }
 
+/// Test function marker attribute of crate [micro_test](index.html)
+///
+/// # Usage
+///
+/// This attribute should be used just like `#[test_case]` attribute.
+///
+/// ```
+/// # #![feature(custom_test_frameworks)]
+/// # #![test_runner(test_runner)]
+/// # use micro_test::micro_assert_eq;
+/// # use micro_test::micro_test_case;
+/// #[micro_test_case]
+/// fn test_function() { }
+/// # fn main() { }
+/// ```
+///
+/// Additional arguments could be passed to this attribute, specifying the
+/// testing target and the feature of the target to be tested by this function.
+/// ```
+/// # #![feature(custom_test_frameworks)]
+/// # #![test_runner(test_runner)]
+/// # use micro_test::micro_assert_eq;
+/// # use micro_test::micro_test_case;
+/// #[micro_test_case(target = "test target", feature = "feature tested")]
+/// fn another_test_function() { }
+/// # fn main() { }
+/// ```
+///
+/// # Explanations
+///
+/// This procedural macro turns the test function into
+/// ```
+/// #[test_case]
+/// fn test_function() {
+///     micro_test::call_user_processor_prepare(Metadata {
+///         target: "test target",
+///         feature: "feature tested"
+///     });
+///     { /* original function body */ }
+///     micro_test::call_user_processor_settle(Ok(()));
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn micro_test_case(
     attr: proc_macro::TokenStream,
@@ -228,17 +259,17 @@ fn micro_test_case_impl(attr_args: ProcMacroAttrArgs, item: TokenStream) -> Toke
     transform_block(&mut block, &micro_test_crate_string);
 
     let micro_test_crate = syn::Ident::from_string(&micro_test_crate_string).unwrap();
-    let metadata = syn::Ident::from_string(METADATA_NAME).unwrap();
     let result_processor = syn::Ident::from_string(RESULT_PROCESSOR_NAME).unwrap();
+    let metadata_processor = syn::Ident::from_string(METADATA_PROCESSOR_NAME).unwrap();
 
     let new_block = quote! {
         {
-            const #metadata: #micro_test_crate::Metadata = #micro_test_crate::Metadata {
+            #micro_test_crate::#metadata_processor(#micro_test_crate::Metadata {
                 target: #target,
                 feature: #feature,
-            };
+            });
             #block
-            #micro_test_crate::#result_processor(::core::result::Result::Ok(#metadata));
+            #micro_test_crate::#result_processor(::core::result::Result::Ok(()));
         }
     };
     input.block = Box::new(syn::parse2::<syn::Block>(new_block).unwrap());

@@ -11,7 +11,10 @@ edition = "2018"
 
 [dependencies]
 micro_test_case = { path = "macros" }
+spin = { version = "^0.9", optional = true }
 
 [features]
+default = ["spin_once"]
 replace_assert = ["micro_test_case/replace_assert"]
 std = []
+spin_once = ["spin/once"]

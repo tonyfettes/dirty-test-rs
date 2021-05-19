@@ -1,4 +1,6 @@
 [package]
+authors = ["Tony Fettes"]
+description = "micro_test_case macros"
 name = "micro_test_case"
 version = "0.1.0"
 edition = "2018"

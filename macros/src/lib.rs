@@ -107,6 +107,7 @@ fn transform_block(block: &mut syn::Block, micro_test_crate: &String) {
     }
 }
 
+#[cfg(any())]
 #[proc_macro_attribute]
 pub fn micro_test_module(
     _attr: proc_macro::TokenStream,
@@ -131,6 +132,8 @@ pub fn micro_test_module(
     quote!(#output).into()
 }
 
+#[cfg(any())]
+#[proc_macro_attribute]
 fn micro_test_module_impl(items: &mut Vec<syn::Item>) {
     for item in items {
         match item {
@@ -171,16 +174,16 @@ pub fn micro_test_case(
             },
         },
     };
-    proc_macro::TokenStream::from(micro_test_case_impl(attr_args, TokenStream::from(item)))
+    let output = micro_test_case_impl(attr_args, TokenStream::from(item));
+    //panic!("OUTPUT_TOKENS: {}", output.to_string());
+    proc_macro::TokenStream::from(output)
 }
 
 fn micro_test_case_impl(attr_args: ProcMacroAttrArgs, item: TokenStream) -> TokenStream {
     // Get the name of micro_test crate
     let micro_test_crate_string = match proc_macro_crate::crate_name("micro_test") {
         Ok(founded_crate) => match founded_crate {
-            proc_macro_crate::FoundCrate::Itself => {
-                panic!("The name of this proc_macro crate should be micro_test_macro")
-            }
+            proc_macro_crate::FoundCrate::Itself => String::from("micro_test"),
             proc_macro_crate::FoundCrate::Name(name_string) => name_string,
         },
         Err(e) => panic!("Cannot find micro_test crate: {}", e),
@@ -189,7 +192,7 @@ fn micro_test_case_impl(attr_args: ProcMacroAttrArgs, item: TokenStream) -> Toke
     let mut input = syn::parse2::<syn::ItemFn>(item).unwrap();
 
     // Process the function signature
-    let signature = input.sig;
+    let signature = input.sig.clone();
     if signature.asyncness.is_some() {
         panic!("#[micro_test_case] test function should not be async");
     }
@@ -205,7 +208,9 @@ fn micro_test_case_impl(attr_args: ProcMacroAttrArgs, item: TokenStream) -> Toke
             panic!("#[micro_test_case] test function should not have return type")
         }
     }
-    let function_name = signature.ident;
+    assert_eq!(signature.inputs.len(), 0, "#[micro_test_case] test function should not have inputs");
+    let function_name = signature.ident.clone();
+
     let target = match attr_args.target {
         Some(target) => target,
         None => function_name.to_string(),
@@ -225,9 +230,9 @@ fn micro_test_case_impl(attr_args: ProcMacroAttrArgs, item: TokenStream) -> Toke
     let micro_test_crate = syn::Ident::from_string(&micro_test_crate_string).unwrap();
     let metadata = syn::Ident::from_string(METADATA_NAME).unwrap();
     let result_processor = syn::Ident::from_string(RESULT_PROCESSOR_NAME).unwrap();
-    quote! {
-        #[test_case]
-        fn #function_name() {
+
+    let new_block = quote! {
+        {
             const #metadata: #micro_test_crate::Metadata = #micro_test_crate::Metadata {
                 target: #target,
                 feature: #feature,
@@ -235,6 +240,11 @@ fn micro_test_case_impl(attr_args: ProcMacroAttrArgs, item: TokenStream) -> Toke
             #block
             #micro_test_crate::#result_processor(::core::result::Result::Ok(#metadata));
         }
+    };
+    input.block = Box::new(syn::parse2::<syn::Block>(new_block).unwrap());
+    quote! {
+        #[test_case]
+        #input
     }
 }
 

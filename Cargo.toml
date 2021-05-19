@@ -1,5 +1,17 @@
-[workspace]
-members = [
-  "micro_test",
-  "micro_test_case",
-]
+[package]
+authors = ["Tony Fettes"]
+categories = ["embedded", "no-std"]
+description = "A dirty, minimal test framework"
+keywords = ["testing", "bare-metal"]
+name = "micro_test"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+micro_test_case = { path = "macros" }
+
+[features]
+replace_assert = ["micro_test_case/replace_assert"]
+std = []

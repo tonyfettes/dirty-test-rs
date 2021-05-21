@@ -10,11 +10,11 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-micro_test_case = { path = "macros" }
+micro_test_macros = { path = "macros" }
 spin = { version = "^0.9", optional = true }
 
 [features]
 default = ["spin_once"]
-replace_assert = ["micro_test_case/replace_assert"]
+replace_assert = ["micro_test_macros/replace_assert"]
 std = []
 spin_once = ["spin/once"]

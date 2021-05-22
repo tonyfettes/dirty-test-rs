@@ -9,7 +9,6 @@ extern crate micro_test_macros;
 pub mod bench;
 #[macro_use]
 pub mod test;
-pub use test::micro_test_case;
 pub mod panic;
 pub mod backtrace;
 pub mod report;

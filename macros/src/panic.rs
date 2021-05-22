@@ -147,13 +147,19 @@ fn transform_block(block: &mut syn::Block) {
             },
             _ => {
                 statements.push(syn::parse_quote! {
-                    return ::core::result::Result::Ok(());
+                    #[allow(unreachable_code)]
+                    {
+                        return ::core::result::Result::Ok(());
+                    }
                 });
             }
         }
     } else {
         statements.push(syn::parse_quote! {
-            return ::core::result::Result::Ok(());
+            #[allow(unreachable_code)]
+            {
+                return ::core::result::Result::Ok(());
+            }
         });
     }
 }

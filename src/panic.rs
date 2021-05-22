@@ -27,24 +27,22 @@ pub fn handle_panic(panic_info: &PanicInfo) {
 #[macro_export]
 macro_rules! micro_panic {
     ($arg:tt) => {
-        $crate::panic::handle_panic({
-            &$crate::panic::PanicInfo {
+        {
+            $crate::panic::handle_panic(&$crate::panic::PanicInfo {
                 message: Some(&format_args!($arg)),
                 location: ::core::panic::Location::caller(),
-            }
-        });
-        let call_stack = $crate::backtrace::CallStack::new();
-        return ::core::result::Result::Err(call_stack);
+            });
+            return ::core::result::Result::Err($crate::backtrace::CallStack::new());
+        }
     };
     ($($arg:tt)*) => {
-        $crate::panic::handle_panic({
-            &$crate::panic::PanicInfo {
-                message: Some(&format_args!($($arg:tt)*)),
+        {
+            $crate::panic::handle_panic(&$crate::panic::PanicInfo {
+                message: Some(&format_args!($($arg)*)),
                 location: ::core::panic::Location::caller(),
-            }
-        });
-        let call_stack = $crate::backtrace::CallStack::new();
-        return ::core::result::Result::Err(call_stack);
+            });
+            return ::core::result::Result::Err($crate::backtrace::CallStack::new());
+        }
     }
 }
 
@@ -52,8 +50,7 @@ macro_rules! micro_panic {
 macro_rules! micro_call {
     (relay $target:ident($($arg:expr),* $(,)*)) => {
         {
-            let ret_val = $target($($arg),*);
-            match ret_val {
+            match $target($($arg),*) {
                 Ok(ret) => ret,
                 Err(mut call_stack) => {
                     call_stack.calls.push($crate::backtrace::FuncCall {
@@ -64,7 +61,10 @@ macro_rules! micro_call {
             }
         }
     };
-    (receive $target:ident($($arg:expr),* $(,)*)) => {
+    (result $target:ident($($arg:expr),* $(,)*)) => {
         $target($($arg),*)
+    };
+    (unwrap $target:ident($($arg:expr),* $(,)*)) => {
+        $target($($arg),*).unwrap()
     };
 }

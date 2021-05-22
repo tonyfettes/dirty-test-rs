@@ -37,83 +37,22 @@ struct EmptyAttrArgs;
 #[allow(unused_macros)]
 macro_rules! attr_fallback {
     (@forward $input:ident, EmptyAttrArgs) => {
-        {
-            ProcMacroAttrArgs {
-                path: false,
-                target: None,
-                feature: None,
-            }
-        }
+        { ProcMacroAttrArgs { path: false, target: None, feature: None, } }
     };
     (@forward $input:ident, PathAttrArgs, $next:expr) => {
-        {
-            match PathAttrArgs::from_list(&$input) {
-                Ok(v) => ProcMacroAttrArgs {
-                    path: v.path,
-                    target: None,
-                    feature: None,
-                },
-                Err(_) => {
-                    $next
-                }
-            }
-        }
+        { match PathAttrArgs::from_list(&$input) { Ok(v) => ProcMacroAttrArgs { path: v.path, target: None, feature: None, }, Err(_) => { $next } } }
     };
     (@forward $input:ident, TargetAttrArgs, $next:expr) => {
-        {
-            match TargetAttrArgs::from_list(&$input) {
-                Ok(v) => ProcMacroAttrArgs {
-                    path: false,
-                    target: Some(v.target),
-                    feature: None,
-                },
-                Err(_) => {
-                    $next
-                }
-            }
-        }
+        { match TargetAttrArgs::from_list(&$input) { Ok(v) => ProcMacroAttrArgs { path: false, target: Some(v.target), feature: None, }, Err(_) => { $next } } }
     };
     (@forward $input:ident, PathTargetAttrArgs, $next:expr) => {
-        {
-            match PathTargetAttrArgs::from_list(&$input) {
-                Ok(v) => ProcMacroAttrArgs {
-                    path: v.path,
-                    target: Some(v.target),
-                    feature: None,
-                },
-                Err(_) => {
-                    $next
-                }
-            }
-        }
+        { match PathTargetAttrArgs::from_list(&$input) { Ok(v) => ProcMacroAttrArgs { path: v.path, target: Some(v.target), feature: None, }, Err(_) => { $next } } }
     };
     (@forward $input:ident, TargetFeatureAttrArgs, $next:expr) => {
-        {
-            match TargetFeatureAttrArgs::from_list(&$input) {
-                Ok(v) => ProcMacroAttrArgs {
-                    path: false,
-                    target: Some(v.target),
-                    feature: Some(v.feature),
-                },
-                Err(_) => {
-                    $next
-                }
-            }
-        }
+        { match TargetFeatureAttrArgs::from_list(&$input) { Ok(v) => ProcMacroAttrArgs { path: false, target: Some(v.target), feature: Some(v.feature), }, Err(_) => { $next } } }
     };
     (@forward $input:ident, PathTargetFeatureAttrArgs, $next:expr) => {
-        {
-            match PathTargetFeatureAttrArgs::from_list(&$input) {
-                Ok(v) => ProcMacroAttrArgs {
-                    path: v.path,
-                    target: Some(v.target),
-                    feature: Some(v.feature),
-                },
-                Err(_) => {
-                    $next
-                }
-            }
-        }
+        { match PathTargetFeatureAttrArgs::from_list(&$input) { Ok(v) => ProcMacroAttrArgs { path: v.path, target: Some(v.target), feature: Some(v.feature), }, Err(_) => { $next } } }
     };
     ($input:expr) => {
         {
@@ -134,7 +73,6 @@ pub struct ProcMacroAttrArgs {
     pub feature: Option<String>,
 }
 
-const RESULT_PROCESSOR_NAME: &'static str = "report_result";
 const METADATA_PROCESSOR_NAME: &'static str = "report_metadata";
 
 pub fn micro_test_case_impl(attr_args: Vec<syn::NestedMeta>, item: TokenStream) -> TokenStream {
@@ -149,6 +87,21 @@ pub fn micro_test_case_impl(attr_args: Vec<syn::NestedMeta>, item: TokenStream) 
     };
 
     let mut input = syn::parse2::<syn::ItemFn>(item).unwrap();
+
+    let mut is_ignored = true;
+    let attrs = input.attrs.clone();
+    for attr in attrs {
+        if attr.path.segments.len() == 1 {
+            if attr.path.segments.last().unwrap().ident.to_string() == "micro_ignore" {
+                is_ignored = true;
+            }
+        } else if attr.path.segments.len() == 2 {
+            if attr.path.segments.last().unwrap().ident.to_string() == "micro_ignore" &&
+                attr.path.segments.first().unwrap().ident.to_string() == micro_test_crate_string {
+                is_ignored = true;
+            }
+        }
+    }
 
     // Process the function signature
     let signature = input.sig.clone();
@@ -169,8 +122,10 @@ pub fn micro_test_case_impl(attr_args: Vec<syn::NestedMeta>, item: TokenStream) 
     }
     assert_eq!(signature.inputs.len(), 0, "#[micro_test_case] test function should not have inputs");
     let function_name = signature.ident.clone();
+
+    // Set default values for attributes.
     let target = match attr_args.target {
-        Some(target) => target,
+        Some(target) => if attr_args.path { "::".to_owned() + &target } else { target },
         None => function_name.to_string(),
     };
     let feature: TokenStream = match attr_args.feature {
@@ -186,36 +141,41 @@ pub fn micro_test_case_impl(attr_args: Vec<syn::NestedMeta>, item: TokenStream) 
     transform_block(&mut block, &micro_test_crate_string);
 
     let micro_test_crate = syn::Ident::from_string(&micro_test_crate_string).unwrap();
-    let result_processor = syn::Ident::from_string(RESULT_PROCESSOR_NAME).unwrap();
     let metadata_processor = syn::Ident::from_string(METADATA_PROCESSOR_NAME).unwrap();
 
-    let new_block = if attr_args.path {
-        quote! {
+    input.block = if attr_args.path {
+        syn::parse_quote! {
             {
-                #micro_test_crate::report::#metadata_processor(#micro_test_crate::test::Metadata {
+                #micro_test_crate::test::#metadata_processor(&#micro_test_crate::test::Metadata {
                     target: ::core::concat!(::core::module_path!(), #target),
                     feature: #feature,
                 });
                 #block
-                #micro_test_crate::report::#result_processor(::core::result::Result::Ok(()));
             }
         }
     } else {
-        quote! {
+        syn::parse_quote! {
             {
-                #micro_test_crate::report::#metadata_processor(#micro_test_crate::test::Metadata {
+                #micro_test_crate::test::#metadata_processor(&#micro_test_crate::test::Metadata {
                     target: #target,
                     feature: #feature,
                 });
                 #block
-                #micro_test_crate::report::#result_processor(::core::result::Result::Ok(()));
             }
         }
     };
-    input.block = Box::new(syn::parse2::<syn::Block>(new_block).unwrap());
-    quote! {
-        #[test_case]
-        #input
+    //input.block = Box::new(syn::parse2::<syn::Block>(new_block).unwrap());
+    if is_ignored {
+        quote! {
+            #[#micro_test_crate::panic::micro_panic_relay]
+            #[test_case]
+            #input
+        }
+    } else {
+        quote! {
+            #[#micro_test_crate::panic::micro_panic_relay]
+            #input
+        }
     }
 }
 

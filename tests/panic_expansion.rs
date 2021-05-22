@@ -12,6 +12,7 @@ fn target_no_input_no_output() {
     micro_panic!("PANIC!");
 }
 
+#[allow(unreachable_code)]
 #[micro_panic_relay]
 fn recursive_panic_relay(level: usize) {
     if level == 0 {
@@ -22,6 +23,7 @@ fn recursive_panic_relay(level: usize) {
     }
 }
 
+#[allow(unreachable_code)]
 #[micro_panic_relay]
 fn target_input_output(mut v: Vec<usize>) -> Vec<usize> {
     v.push(1);
@@ -34,9 +36,9 @@ fn target_input_output(mut v: Vec<usize>) -> Vec<usize> {
 }
 
 #[test]
+#[should_panic]
 #[micro_panic_receiver]
-fn panic_main() {
-
+fn panic_test() {
     fn handle(info: &PanicInfo) {
         println!("{}", info.message.unwrap());
     }
@@ -52,6 +54,26 @@ fn panic_main() {
         }),
     });
     let v: Vec<usize> = vec![5, 6, 7, 8];
-    micro_call!(receive target_input_output(v));
-    micro_call!(receive recursive_panic_relay(10));
+    micro_call!(unwrap target_input_output(v));
+}
+
+#[test]
+#[should_panic]
+#[micro_panic_receiver]
+fn recursive_panic_relay_test() {
+    //fn handle(info: &PanicInfo) {
+    //    println!("{}", info.message.unwrap());
+    //}
+
+    //set_panic_handler(handle);
+    //set_reporter(&Reporter {
+    //    metadata: None,
+    //    result: None,
+    //    call_stack: Some(|call_stack: CallStack| {
+    //        for (i, call) in call_stack.calls.iter().enumerate() {
+    //            println!("#{}: {}", i, call.name);
+    //        }
+    //    }),
+    //});
+    micro_call!(unwrap recursive_panic_relay(10));
 }

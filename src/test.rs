@@ -61,7 +61,7 @@
 //! mod tests {
 //!     use super::*;
 //!     use micro_test::micro_assert_eq;
-//!     use micro_test::micro_test_case;
+//!     use micro_test::test::micro_test_case;
 //!
 //!     #[micro_test_case(target = "add_by_one", feature = "return value")]
 //!     pub fn test_add_by_one() {
@@ -109,6 +109,8 @@
 pub use micro_test_macros::micro_test_case;
 use core::fmt::Result as FmtResult;
 use core::fmt::{Debug, Display, Formatter};
+
+pub use crate::panic::PanicInfo as Error;
 
 /// Metadata about a test
 ///
@@ -158,16 +160,46 @@ impl Display for Metadata {
     }
 }
 
-/// The error type contains cause in the form of [format
-/// arguments](https://doc.rust-lang.org/core/fmt/struct.Arguments.html)
-#[derive(Clone, Debug)]
-pub struct Error<'a> {
-    pub cause: core::fmt::Arguments<'a>,
+impl Metadata {
+    pub const fn new() -> Self {
+        Self {
+            target: "",
+            feature: None,
+        }
+    }
 }
+
+#[cfg(feature = "spin_once")]
+static METADATA_HANDLER: spin::Once<fn(&Metadata)> = spin::Once::new();
+
+pub fn set_metadata_reporter(reporter: fn(&Metadata)) {
+    if METADATA_HANDLER.is_completed() {
+        panic!("micro_test metadata reporter has already been initialized");
+    } else {
+        METADATA_HANDLER.call_once(|| reporter);
+    }
+}
+
+pub fn report_metadata(metadata: &Metadata) {
+    match METADATA_HANDLER.get() {
+        Some(metadata_handler) => metadata_handler(metadata),
+        None => panic!("metadata reporter has not been initialized"),
+    }
+}
+
+// The error type contains cause in the form of [format
+// arguments](https://doc.rust-lang.org/core/fmt/struct.Arguments.html)
+//#[derive(Clone, Debug)]
+//pub struct Error<'a> {
+//    pub cause: core::fmt::Arguments<'a>,
+//}
 
 impl<'a> Display for Error<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        f.write_fmt(format_args!("{}", self.cause))
+        match self.message {
+            Some(msg) => f.write_fmt(format_args!("{}: {}", msg, self.location)),
+            None => f.write_fmt(format_args!("{}", self.location)),
+        }
     }
 }
 
@@ -184,8 +216,13 @@ pub type Result<'a> = ::core::result::Result<(), Error<'a>>;
 /// # Example
 ///
 /// ```rust
+/// # #![feature(custom_test_frameworks)]
 /// # use micro_test::micro_assert;
+/// # use micro_test::test::micro_test_case;
+/// # #[micro_test_case]
+/// # fn test() {
 /// micro_assert!(1 + 1 == 2, "Math is broken.");
+/// # }
 /// ```
 ///
 /// # Explanations
@@ -215,23 +252,13 @@ macro_rules! micro_assert {
     ($test_expr:expr $(,)?) => {
         match $test_expr {
             true => {},
-            false => {
-                $crate::report::report_result(::core::result::Result::Err($crate::test::Error {
-                    cause: ::core::format_args!("assertion failed: `{}`", ::core::stringify!($test_expr)),
-                }));
-                return;
-            }
+            false => $crate::micro_panic!("assertion failed: `{}`", ::core::stringify!($test_expr)),
         }
     };
     ($test_expr:expr, $($arg:tt)+) => {
         match $test_expr {
             true => {},
-            false => {
-                $crate::report::report_result(::core::result::Result::Err($crate::test::Error {
-                    cause: ::core::format_args!($($arg)+),
-                }));
-                return;
-            }
+            false => $crate::micro_panic!($($arg)+),
         }
     }
 }
@@ -245,15 +272,9 @@ macro_rules! micro_assert_eq {
         match (&$left, &$right) {
             (left_val, right_val) => {
                 if !(*left_val == *right_val) {
-                    $crate::report::report_result(::core::result::Result::Err($crate::test::Error {
-                        cause: ::core::format_args!(
-                            r#"assertion failed: `(left == right)`
+                    $crate::micro_panic!(r#"assertion failed: `(left == right)`
  left: `{:?}`,
-right: `{:?}`"#,
-                            left_val, right_val
-                        ),
-                    }));
-                    return;
+right: `{:?}`"#, left_val, right_val);
                 }
             }
         }
@@ -262,15 +283,9 @@ right: `{:?}`"#,
         match (&$left, &$right) {
             (left_val, right_val) => {
                 if !(*left_val == *right_val) {
-                    $crate::report::report_result(::core::result::Result::Err($crate::test::Error {
-                        cause: ::core::format_args!(
-                            r#"assertion failed: `(left == right)`
+                    $crate::micro_panic!(r#"assertion failed: `(left == right)`
  left: `{:?}`,
-right: `{:?}`: {}"#,
-                            left_val, right_val, $($arg)+
-                        ),
-                    }));
-                    return;
+right: `{:?}`: {}"#, left_val, right_val, $($arg)+);
                 }
             }
         }
@@ -286,15 +301,9 @@ macro_rules! micro_assert_ne {
         match (&$left, &$right) {
             (left_val, right_val) => {
                 if !(*left_val != *right_val) {
-                    $crate::report::report_result(::core::result::Result::Err($crate::test::Error {
-                        cause: ::core::format_args!(
-                            r#"assertion failed: `(left != right)`
+                    $crate::micro_panic!(r#"assertion failed: `(left != right)`
  left: `{:?}`,
-right: `{:?}`"#,
-                            left_val, right_val
-                        ),
-                    }));
-                    return;
+right: `{:?}`"#, left_val, right_val);
                 }
             }
         }
@@ -303,15 +312,9 @@ right: `{:?}`"#,
         match (&$left, &$right) {
             (left_val, right_val) => {
                 if !(*left_val != *right_val) {
-                    $crate::report::report_result(::core::result::Result::Err($crate::test::Error {
-                        cause: ::core::format_args!(
-                            r#"assertion failed: `(left != right)`
+                    $crate::micro_panic!(relay r#"assertion failed: `(left != right)`
  left: `{:?}`,
-right: `{:?}`: {}"#,
-                            left_val, right_val, $($arg)+
-                        ),
-                    }));
-                    return;
+right: `{:?}`: {}"#, left_val, right_val, $($arg)+);
                 }
             }
         }

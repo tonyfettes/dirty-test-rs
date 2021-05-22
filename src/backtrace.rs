@@ -2,7 +2,7 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CallStack {
     pub calls: Vec<FuncCall>
 }
@@ -15,7 +15,7 @@ impl CallStack {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FuncCall {
     pub name: &'static str
 }
